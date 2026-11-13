@@ -1,0 +1,7 @@
+# dsh-cabinet 自带的挂载声明：装上本包后，profile 只要在 dsh.profile.bundles 里列出
+# "dsh-cabinet" 即生效；入口 id 固定为 cabinet（设置页的命名空间也用它）。
+- insert:
+    - id: cabinet
+      name: dsh-cabinet
+      config:
+        enabled: true

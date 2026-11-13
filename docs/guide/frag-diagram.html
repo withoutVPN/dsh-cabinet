@@ -1,0 +1,338 @@
+<!-- frag-diagram.html：主图「一条时间轴」（由 diagram 模块交付，拼入 guide 单页）
+     数据来源：本机 2026-11-13 两场真实会话日志（session-6d06b288 串行段 / 3fe36041 并行·交付段），
+     按首辅 brief 给定的时间线逐格绘制，数字一行未改。内联 SVG，无 JS、无外部资源、无位图标签。 -->
+<figure id="diagram" class="frag-diagram">
+  <div class="frag-diagram-scroll" style="overflow-x:auto">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2190 806" width="2190" height="806"
+         preserveAspectRatio="xMinYMin meet" role="img" aria-labelledby="cab-fig-title cab-fig-desc"
+         fill="currentColor"
+         font-family="system-ui,-apple-system,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif"
+         style="width:100%;min-width:1200px;height:auto;display:block">
+      <title id="cab-fig-title">dsh-cabinet 一场真实会议的时间轴：同一条会话里多个模型各说一段，后段并行分工，末格收口交付</title>
+      <desc id="cab-fig-desc">横轴是会话时间，纵轴三条泳道：首辅、阁员、分工。前段十格来自 session-6d06b288：首辅 deepseek-v4.1-flash 召集，务实派 deepseek-v4-pro、挑刺派 glm-5.3、奇想派 qwen3.8-max 在同一会话里轮流第一句话，首辅出 3 个方案、用户定方案 1、首辅交 4 模块契约；12:16:43 系统插入 model changed 分隔（换成 deepseek-v4-pro），随后用户插话收回话筒、首辅 bump BUILD 0.8.0。中后段来自 session-3fe36041：cabinet_dispatch 并行派活，pad 给务实派、fmt 给挑刺派、entry 给奇想派，各自独立子会话；cabinet_audit 三位质检员各判 ok；cabinet_integrate 落 delivered，3 个文件，实测 pad(5)='05'、fmt(9,5)='09:05'。</desc>
+      <style>
+        .cab-mono{font-family:ui-monospace,'Cascadia Mono','Cascadia Code',Consolas,'JetBrains Mono',monospace}
+        .cab-time{font-size:10px;fill-opacity:.75}
+        .cab-hdr{font-size:9.5px;fill-opacity:.95;letter-spacing:-0.2px}
+        .cab-role{font-size:12.5px;font-weight:700}
+        .cab-act{font-size:10.5px;fill-opacity:.9}
+        .cab-det{font-size:9.5px;fill-opacity:.72}
+        .cab-note{font-size:8.8px;fill-opacity:.68}
+        .cab-cap{font-size:10px;fill-opacity:.8}
+        .cab-leg{font-size:10.5px;fill-opacity:.85}
+        .cab-lane{font-size:12px;font-weight:700}
+        .cab-lane-sub{font-size:8.5px;fill-opacity:.7}
+        .cab-title{font-size:16px;font-weight:700}
+        .cab-subtitle{font-size:10.5px;fill-opacity:.72}
+        .cab-cell{stroke:currentColor;stroke-opacity:.28;stroke-width:1}
+        .cab-userbox{fill:none;stroke:currentColor;stroke-opacity:.5;stroke-width:1.2;stroke-dasharray:5 3}
+        .cab-chain{fill:none;stroke:currentColor;stroke-opacity:.55;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+        .cab-dash{fill:none;stroke:currentColor;stroke-opacity:.5;stroke-width:1.8;stroke-dasharray:7 5;stroke-linejoin:round;stroke-linecap:round}
+        .cab-bold{fill:none;stroke:currentColor;stroke-opacity:.75;stroke-width:2.6;stroke-linejoin:round;stroke-linecap:round}
+        .cab-dotv{stroke:currentColor;stroke-opacity:.4;stroke-width:1.6;stroke-dasharray:2 5;stroke-linecap:round}
+        .cab-dotv-strong{stroke:currentColor;stroke-opacity:.6;stroke-width:2.2;stroke-dasharray:2 5;stroke-linecap:round}
+        .cab-axis{stroke:currentColor;stroke-opacity:.35;stroke-width:1.2}
+        .cab-tick{stroke:currentColor;stroke-opacity:.4;stroke-width:1}
+        .cab-bracket{fill:none;stroke:currentColor;stroke-opacity:.4;stroke-width:1.4}
+      </style>
+      <defs>
+        <marker id="cab-arw" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto">
+          <path d="M0,1 L10,5 L0,9 z" fill="currentColor" fill-opacity=".65"/>
+        </marker>
+        <marker id="cab-arw-b" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto">
+          <path d="M0,1 L10,5 L0,9 z" fill="currentColor" fill-opacity=".8"/>
+        </marker>
+      </defs>
+
+      <!-- ═══ 标题 ═══ -->
+      <text class="cab-title" x="150" y="28">一条时间轴：同一会话多模型发言 → 契约 → 并行分工 → 质检 → 收口交付</text>
+      <text class="cab-subtitle" x="150" y="48">机械绘制自本机 2026-11-13 真实会话日志：前段 session-6d06b288 · 并行与交付段 session-3fe36041 · 每格格头＝该次发言实际使用的模型名</text>
+
+      <!-- ═══ 三条泳道底色 ═══ -->
+      <rect x="144" y="108" width="2020" height="154" rx="10" fill="#cf9f4f" fill-opacity=".05"/>
+      <rect x="144" y="270" width="2020" height="154" rx="10" fill="#6f96c4" fill-opacity=".05"/>
+      <rect x="144" y="432" width="2020" height="236" rx="10" fill="#74b192" fill-opacity=".05"/>
+
+      <!-- 泳道标签 -->
+      <g>
+        <rect x="16" y="163" width="120" height="44" rx="8" fill="#cf9f4f" fill-opacity=".12" stroke="#cf9f4f" stroke-opacity=".4"/>
+        <text class="cab-lane" x="76" y="181" text-anchor="middle">① 首辅 chair</text>
+        <text class="cab-lane-sub" x="76" y="197" text-anchor="middle">召集·方案·契约·收口</text>
+        <rect x="16" y="325" width="120" height="44" rx="8" fill="#6f96c4" fill-opacity=".12" stroke="#6f96c4" stroke-opacity=".4"/>
+        <text class="cab-lane" x="76" y="343" text-anchor="middle">② 阁员 seats</text>
+        <text class="cab-lane-sub" x="76" y="359" text-anchor="middle">三席轮流发言·质检</text>
+        <rect x="16" y="528" width="120" height="44" rx="8" fill="#74b192" fill-opacity=".12" stroke="#74b192" stroke-opacity=".4"/>
+        <text class="cab-lane" x="76" y="546" text-anchor="middle">③ 分工 dispatch</text>
+        <text class="cab-lane-sub" x="76" y="562" text-anchor="middle">独立子会话 ≤3 并发</text>
+      </g>
+
+      <!-- ═══ 横轴（会话时间） ═══ -->
+      <text class="cab-note" x="16" y="84">横轴＝会话时间</text>
+      <line class="cab-axis" x1="150" y1="96" x2="2164" y2="96" marker-end="url(#cab-arw)"/>
+      <g class="cab-mono cab-time" text-anchor="middle">
+        <line class="cab-tick" x1="214" y1="90" x2="214" y2="96"/><text x="214" y="80">12:11:30</text>
+        <line class="cab-tick" x1="364" y1="90" x2="364" y2="96"/><text x="364" y="80">12:11:44</text>
+        <line class="cab-tick" x1="514" y1="90" x2="514" y2="96"/><text x="514" y="80">12:11:52</text>
+        <line class="cab-tick" x1="664" y1="90" x2="664" y2="96"/><text x="664" y="80">12:12:00</text>
+        <line class="cab-tick" x1="814" y1="90" x2="814" y2="96"/><text x="814" y="80">12:12:07</text>
+        <line class="cab-tick" x1="952" y1="90" x2="952" y2="96"/><text x="952" y="80">12:12:12</text>
+        <line class="cab-tick" x1="1096" y1="90" x2="1096" y2="96"/><text x="1096" y="80">12:14:19</text>
+        <line class="cab-tick" x1="1240" y1="90" x2="1240" y2="96"/><text x="1240" y="80">12:16:43</text>
+        <line class="cab-tick" x1="1372" y1="90" x2="1372" y2="96"/><text x="1372" y="80">12:22:25</text>
+        <line class="cab-tick" x1="1516" y1="90" x2="1516" y2="96"/><text x="1516" y="80">12:25:30</text>
+        <text class="cab-cap" x="1697" y="80">并行段</text>
+        <text class="cab-cap" x="1889" y="80">质检</text>
+        <text class="cab-cap" x="2071" y="80">交付</text>
+      </g>
+      <!-- 轴上标记：◇ 用户 ■ 系统 -->
+      <path d="M952,87 L961,96 L952,105 L943,96 Z" fill="currentColor" fill-opacity=".75"/>
+      <path d="M1372,87 L1381,96 L1372,105 L1363,96 Z" fill="currentColor" fill-opacity=".75"/>
+      <rect x="1234" y="90" width="12" height="12" fill="currentColor" fill-opacity=".85"/>
+
+      <!-- ═══ 系统/用户插入：点线竖分隔（不是发言） ═══ -->
+      <line class="cab-dotv" x1="952" y1="105" x2="952" y2="668"/>
+      <line class="cab-dotv-strong" x1="1240" y1="106" x2="1240" y2="668"/>
+      <line class="cab-dotv" x1="1372" y1="105" x2="1372" y2="668"/>
+
+      <!-- ═══ 串行段格子（session-6d06b288） ═══ -->
+      <!-- c1 12:11:30 首辅 convene -->
+      <g>
+        <rect class="cab-cell" x="150" y="130" width="128" height="120" rx="8" fill="#cf9f4f" fill-opacity=".08"/>
+        <rect x="150" y="130" width="128" height="24" rx="8" fill="#cf9f4f" fill-opacity=".18"/>
+        <rect x="150" y="146" width="128" height="8" fill="#cf9f4f" fill-opacity=".18"/>
+        <rect x="152" y="138" width="4" height="104" rx="2" fill="#cf9f4f" fill-opacity=".65"/>
+        <text class="cab-mono cab-hdr" x="162" y="146">deepseek-v4.1-flash</text>
+        <text class="cab-role" x="162" y="176">首辅</text>
+        <text class="cab-mono cab-act" x="162" y="196">cabinet_convene</text>
+        <text class="cab-det" x="162" y="214">点名三席</text>
+      </g>
+      <!-- c2 12:11:44 务实派第一句话 -->
+      <g>
+        <rect class="cab-cell" x="300" y="290" width="128" height="120" rx="8" fill="#6f96c4" fill-opacity=".08"/>
+        <rect x="300" y="290" width="128" height="24" rx="8" fill="#6f96c4" fill-opacity=".18"/>
+        <rect x="300" y="306" width="128" height="8" fill="#6f96c4" fill-opacity=".18"/>
+        <rect x="302" y="298" width="4" height="104" rx="2" fill="#6f96c4" fill-opacity=".65"/>
+        <text class="cab-mono cab-hdr" x="312" y="306">deepseek-v4-pro</text>
+        <text class="cab-role" x="312" y="336">务实派</text>
+        <text class="cab-act" x="312" y="356">第一句话</text>
+        <text class="cab-det" x="312" y="374">会话没换 · 说话人换了</text>
+      </g>
+      <text class="cab-note" x="364" y="422" text-anchor="middle">对比上一格：模型名真的变了（v4.1-flash → v4-pro）</text>
+      <!-- c3 12:11:52 挑刺派第一句话 -->
+      <g>
+        <rect class="cab-cell" x="450" y="290" width="128" height="120" rx="8" fill="#6f96c4" fill-opacity=".08"/>
+        <rect x="450" y="290" width="128" height="24" rx="8" fill="#6f96c4" fill-opacity=".18"/>
+        <rect x="450" y="306" width="128" height="8" fill="#6f96c4" fill-opacity=".18"/>
+        <rect x="452" y="298" width="4" height="104" rx="2" fill="#6f96c4" fill-opacity=".65"/>
+        <text class="cab-mono cab-hdr" x="462" y="306">glm-5.3</text>
+        <text class="cab-role" x="462" y="336">挑刺派</text>
+        <text class="cab-act" x="462" y="356">第一句话</text>
+        <text class="cab-det" x="462" y="374">会话没换 · 说话人换了</text>
+      </g>
+      <!-- c4 12:12:00 奇想派第一句话 -->
+      <g>
+        <rect class="cab-cell" x="600" y="290" width="128" height="120" rx="8" fill="#6f96c4" fill-opacity=".08"/>
+        <rect x="600" y="290" width="128" height="24" rx="8" fill="#6f96c4" fill-opacity=".18"/>
+        <rect x="600" y="306" width="128" height="8" fill="#6f96c4" fill-opacity=".18"/>
+        <rect x="602" y="298" width="4" height="104" rx="2" fill="#6f96c4" fill-opacity=".65"/>
+        <text class="cab-mono cab-hdr" x="612" y="306">qwen3.8-max</text>
+        <text class="cab-role" x="612" y="336">奇想派</text>
+        <text class="cab-act" x="612" y="356">第一句话</text>
+        <text class="cab-det" x="612" y="374">会话没换 · 说话人换了</text>
+      </g>
+      <!-- c5 12:12:07 首辅 propose -->
+      <g>
+        <rect class="cab-cell" x="750" y="130" width="128" height="120" rx="8" fill="#cf9f4f" fill-opacity=".08"/>
+        <rect x="750" y="130" width="128" height="24" rx="8" fill="#cf9f4f" fill-opacity=".18"/>
+        <rect x="750" y="146" width="128" height="8" fill="#cf9f4f" fill-opacity=".18"/>
+        <rect x="752" y="138" width="4" height="104" rx="2" fill="#cf9f4f" fill-opacity=".65"/>
+        <text class="cab-mono cab-hdr" x="762" y="146">deepseek-v4.1-flash</text>
+        <text class="cab-role" x="762" y="176">首辅</text>
+        <text class="cab-mono cab-act" x="762" y="196">cabinet_propose</text>
+        <text class="cab-det" x="762" y="214">→ 3 个方案</text>
+      </g>
+      <!-- c6 12:12:12 用户 decide（跨泳道虚框：不是模型发言） -->
+      <g>
+        <rect class="cab-userbox" x="900" y="230" width="104" height="72" rx="8"/>
+        <text class="cab-role" x="952" y="252" text-anchor="middle" font-size="11.5">用户（真人）</text>
+        <text class="cab-mono cab-act" x="952" y="270" text-anchor="middle" font-size="10">cabinet_decide</text>
+        <text class="cab-det" x="952" y="288" text-anchor="middle">选方案 1</text>
+      </g>
+      <!-- c7 12:14:19 首辅 frame -->
+      <g>
+        <rect class="cab-cell" x="1026" y="130" width="140" height="120" rx="8" fill="#cf9f4f" fill-opacity=".08"/>
+        <rect x="1026" y="130" width="140" height="24" rx="8" fill="#cf9f4f" fill-opacity=".18"/>
+        <rect x="1026" y="146" width="140" height="8" fill="#cf9f4f" fill-opacity=".18"/>
+        <rect x="1028" y="138" width="4" height="104" rx="2" fill="#cf9f4f" fill-opacity=".65"/>
+        <text class="cab-mono cab-hdr" x="1038" y="146">deepseek-v4.1-flash</text>
+        <text class="cab-role" x="1038" y="176">首辅</text>
+        <text class="cab-mono cab-act" x="1038" y="196">cabinet_frame</text>
+        <text class="cab-det" x="1038" y="214">交契约 · 4 模块</text>
+      </g>
+      <!-- c8 12:16:43 系统分隔 model changed（换人的肉眼证据） -->
+      <g>
+        <line class="cab-dotv-strong" x1="1240" y1="370" x2="1252" y2="370"/>
+        <rect class="cab-userbox" x="1252" y="338" width="200" height="76" rx="8" stroke-opacity=".7"/>
+        <text class="cab-det" x="1264" y="354" font-weight="700" fill-opacity=".9">系统 · 在会话里插入分隔</text>
+        <text class="cab-mono" x="1264" y="370" font-size="10.5" font-weight="700">model changed</text>
+        <text class="cab-mono" x="1264" y="386" font-size="10.5" font-weight="700">→ deepseek-v4-pro</text>
+        <text class="cab-note" x="1264" y="404">换人真的发生了：同一条会话，模型换了</text>
+      </g>
+      <!-- c9 12:22:25 用户插话 -->
+      <g>
+        <rect class="cab-userbox" x="1314" y="230" width="116" height="72" rx="8"/>
+        <text class="cab-role" x="1372" y="258" text-anchor="middle" font-size="11.5">用户插话</text>
+        <text class="cab-det" x="1372" y="278" text-anchor="middle">话筒被收回首辅</text>
+      </g>
+      <!-- c10 12:25:30 首辅 bump -->
+      <g>
+        <rect class="cab-cell" x="1452" y="130" width="128" height="120" rx="8" fill="#cf9f4f" fill-opacity=".08"/>
+        <rect x="1452" y="130" width="128" height="24" rx="8" fill="#cf9f4f" fill-opacity=".18"/>
+        <rect x="1452" y="146" width="128" height="8" fill="#cf9f4f" fill-opacity=".18"/>
+        <rect x="1454" y="138" width="4" height="104" rx="2" fill="#cf9f4f" fill-opacity=".65"/>
+        <text class="cab-mono cab-hdr" x="1464" y="146">deepseek-v4-pro</text>
+        <text class="cab-role" x="1464" y="176">首辅</text>
+        <text class="cab-act" x="1464" y="196">bump BUILD</text>
+        <text class="cab-det" x="1464" y="214">0.8.0</text>
+        <text class="cab-note" x="1464" y="230">（据 12:16:43 分隔）</text>
+      </g>
+
+      <!-- ═══ 并行段（session-3fe36041）：fork ─ 三格并列 ─ join ═══ -->
+      <text class="cab-cap" x="1697" y="450" text-anchor="middle">cabinet_dispatch · ≤3 并发 · childId 各自不同</text>
+      <rect x="1604" y="458" width="8" height="194" rx="3" fill="#74b192" fill-opacity=".75"/>
+      <rect x="1784" y="458" width="8" height="194" rx="3" fill="#74b192" fill-opacity=".75"/>
+      <g>
+        <rect class="cab-cell" x="1626" y="458" width="150" height="58" rx="7" fill="#74b192" fill-opacity=".08"/>
+        <rect x="1626" y="458" width="150" height="20" rx="7" fill="#74b192" fill-opacity=".18"/>
+        <rect x="1626" y="471" width="150" height="7" fill="#74b192" fill-opacity=".18"/>
+        <rect x="1628" y="464" width="4" height="46" rx="2" fill="#74b192" fill-opacity=".65"/>
+        <text class="cab-mono cab-hdr" x="1638" y="472">deepseek-v4-pro</text>
+        <text class="cab-act" x="1638" y="492" font-weight="700">第 1 批 · pad → 务实派</text>
+        <text class="cab-mono cab-note" x="1638" y="507">子会话 8194d9b3</text>
+      </g>
+      <g>
+        <rect class="cab-cell" x="1626" y="526" width="150" height="58" rx="7" fill="#74b192" fill-opacity=".08"/>
+        <rect x="1626" y="526" width="150" height="20" rx="7" fill="#74b192" fill-opacity=".18"/>
+        <rect x="1626" y="539" width="150" height="7" fill="#74b192" fill-opacity=".18"/>
+        <rect x="1628" y="532" width="4" height="46" rx="2" fill="#74b192" fill-opacity=".65"/>
+        <text class="cab-mono cab-hdr" x="1638" y="540">glm-5.3</text>
+        <text class="cab-act" x="1638" y="560" font-weight="700">第 2 批 · fmt → 挑刺派</text>
+        <text class="cab-mono cab-note" x="1638" y="575">子会话 d6645bba</text>
+      </g>
+      <g>
+        <rect class="cab-cell" x="1626" y="594" width="150" height="58" rx="7" fill="#74b192" fill-opacity=".08"/>
+        <rect x="1626" y="594" width="150" height="20" rx="7" fill="#74b192" fill-opacity=".18"/>
+        <rect x="1626" y="607" width="150" height="7" fill="#74b192" fill-opacity=".18"/>
+        <rect x="1628" y="600" width="4" height="46" rx="2" fill="#74b192" fill-opacity=".65"/>
+        <text class="cab-mono cab-hdr" x="1638" y="608">qwen3.8-max</text>
+        <text class="cab-act" x="1638" y="628" font-weight="700">第 3 批 · entry → 奇想派</text>
+        <text class="cab-mono cab-note" x="1638" y="643">子会话 dc054d5f</text>
+      </g>
+
+      <!-- ═══ 质检（cabinet_audit，阁员泳道） ═══ -->
+      <g>
+        <rect class="cab-cell" x="1814" y="290" width="150" height="120" rx="8" fill="#6f96c4" fill-opacity=".08"/>
+        <rect x="1814" y="290" width="150" height="24" rx="8" fill="#6f96c4" fill-opacity=".18"/>
+        <rect x="1814" y="306" width="150" height="8" fill="#6f96c4" fill-opacity=".18"/>
+        <rect x="1816" y="298" width="4" height="104" rx="2" fill="#6f96c4" fill-opacity=".65"/>
+        <text class="cab-mono cab-hdr" x="1826" y="306">cabinet_audit</text>
+        <text x="1826" y="334" font-size="11.5" font-weight="700">三位质检员 · 各判 ok</text>
+        <text class="cab-mono" x="1826" y="352" font-size="9">挑刺派 glm-5.3 → ok</text>
+        <text class="cab-mono" x="1826" y="366" font-size="9">务实派 deepseek-v4-pro → ok</text>
+        <text class="cab-mono" x="1826" y="380" font-size="9">务实派 deepseek-v4-pro → ok</text>
+        <text class="cab-note" x="1826" y="398">各给文件行号证据</text>
+      </g>
+
+      <!-- ═══ 末格收口（cabinet_integrate，首辅泳道，双线框） ═══ -->
+      <g>
+        <rect x="1982" y="126" width="178" height="132" rx="10" fill="none" stroke="currentColor" stroke-opacity=".45" stroke-width="1.4"/>
+        <rect class="cab-cell" x="1986" y="130" width="170" height="124" rx="8" fill="#cf9f4f" fill-opacity=".08"/>
+        <rect x="1986" y="130" width="170" height="24" rx="8" fill="#cf9f4f" fill-opacity=".18"/>
+        <rect x="1986" y="146" width="170" height="8" fill="#cf9f4f" fill-opacity=".18"/>
+        <rect x="1988" y="138" width="4" height="108" rx="2" fill="#cf9f4f" fill-opacity=".65"/>
+        <text class="cab-mono cab-hdr" x="1998" y="146">cabinet_integrate</text>
+        <text class="cab-role" x="1998" y="176">收口 · 交付</text>
+        <text class="cab-act" x="1998" y="196">落 delivered · 3 个文件</text>
+        <text class="cab-mono cab-det" x="1998" y="214">实测 pad(5)==='05' ✓</text>
+        <text class="cab-mono cab-det" x="1998" y="230">fmt(9,5)==='09:05' ✓</text>
+      </g>
+
+      <!-- ═══ 连线 ═══ -->
+      <!-- 实线：话筒交接（同一条会话里换人） -->
+      <g class="cab-chain" marker-end="url(#cab-arw)">
+        <path d="M278,190 H289 V350 H300"/>
+        <path d="M428,350 H450"/>
+        <path d="M578,350 H600"/>
+        <path d="M728,350 H739 V190 H750"/>
+        <path d="M878,190 H889 V266 H900"/>
+        <path d="M1004,266 H1015 V190 H1026"/>
+        <path d="M1166,190 H1177 V266 H1314"/>
+        <path d="M1430,266 H1441 V190 H1452"/>
+      </g>
+      <!-- 虚线：并行 fork / join（独立子会话） -->
+      <g class="cab-dash" marker-end="url(#cab-arw)">
+        <path d="M1096,250 V555 H1596"/>
+        <path d="M1612,487 H1626"/>
+        <path d="M1612,555 H1626"/>
+        <path d="M1612,623 H1626"/>
+        <path d="M1792,555 H1802 V350 H1814"/>
+      </g>
+      <g class="cab-dash">
+        <path d="M1776,487 H1784"/>
+        <path d="M1776,555 H1784"/>
+        <path d="M1776,623 H1784"/>
+      </g>
+      <text class="cab-cap" x="1348" y="546" text-anchor="middle">按契约并行派活 · 数据来自另一场真会议 3fe36041</text>
+      <!-- 粗实线：质检通过 → 末格收口 -->
+      <path class="cab-bold" d="M1964,350 H1974 V190 H1982" marker-end="url(#cab-arw-b)"/>
+
+      <!-- ═══ 数据出处括线 ═══ -->
+      <path class="cab-bracket" d="M150,684 V676 H1580 V684"/>
+      <text class="cab-mono cab-note" x="865" y="700" text-anchor="middle" font-size="10">session-6d06b288 · 同一条会话 12:11:30 → 12:25:30（含 12:16:43 model changed 分隔）</text>
+      <path class="cab-bracket" d="M1602,684 V676 H2156 V684"/>
+      <text class="cab-mono cab-note" x="1879" y="700" text-anchor="middle" font-size="10">session-3fe36041 · 并行派活 → 质检 → 交付</text>
+
+      <!-- ═══ 图例 ═══ -->
+      <rect x="144" y="706" width="2020" height="82" rx="10" fill="currentColor" fill-opacity=".035"/>
+      <g>
+        <text class="cab-leg" x="160" y="732" font-weight="700">线型</text>
+        <line class="cab-chain" x1="300" y1="728" x2="344" y2="728" marker-end="url(#cab-arw)"/>
+        <text class="cab-leg" x="356" y="732">实线 · 话筒交接——同一条会话里换人发言（格头模型名随之变）</text>
+        <line class="cab-dash" x1="780" y1="728" x2="824" y2="728" marker-end="url(#cab-arw)"/>
+        <text class="cab-leg" x="836" y="732">虚线 · 并行派活——拆成独立子会话（≤3 并发），完事汇合</text>
+        <line class="cab-dotv" x1="1290" y1="718" x2="1290" y2="738"/>
+        <path d="M1310,722 L1316,728 L1310,734 L1304,728 Z" fill="currentColor" fill-opacity=".75"/>
+        <rect x="1330" y="723" width="10" height="10" fill="currentColor" fill-opacity=".85"/>
+        <text class="cab-leg" x="1352" y="732">点线竖分隔 · 系统/用户插入，不是发言（◇ 用户 ■ 系统）</text>
+      </g>
+      <g>
+        <text class="cab-leg" x="160" y="765" font-weight="700">色块</text>
+        <rect x="300" y="754" width="14" height="14" rx="3" fill="#cf9f4f" fill-opacity=".55"/>
+        <text class="cab-leg" x="322" y="765">首辅 chair——召集 / 出方案 / 交契约 / 收口交付</text>
+        <rect x="700" y="754" width="14" height="14" rx="3" fill="#6f96c4" fill-opacity=".55"/>
+        <text class="cab-leg" x="722" y="765">阁员 seats——务实派 / 挑刺派 / 奇想派：轮流发言、质检各判</text>
+        <rect x="1160" y="754" width="14" height="14" rx="3" fill="#74b192" fill-opacity=".55"/>
+        <text class="cab-leg" x="1182" y="765">分工 dispatch——每模块一个独立子会话，不同模型认领</text>
+      </g>
+      <text class="cab-note" x="2164" y="800" text-anchor="end">本图逐格取自真实 session 日志（request/header · tool/call · user/message）· 重画命令见图下 figcaption</text>
+    </svg>
+  </div>
+  <figcaption class="frag-diagram-caption">
+    <p>
+      <strong>这张图是证据，不是插画。</strong>
+      它按本机 2026-11-13 两场<strong>真实会话日志</strong>逐格机械绘制：前十格来自同一条会话
+      <code>session-6d06b288</code>（多模型轮流发言，含 12:16:43 系统插入的 <code>model changed</code> 分隔——「换人真的发生了」的肉眼证据），
+      并行、质检与交付段来自另一场真会议 <code>3fe36041</code>。
+      每格格头的模型名取自日志的 <code>request/header</code> 与消息 <code>source.model</code> 字段，不是手写的。
+    </p>
+    <p>
+      用你自己的日志重画（需要 Node ≥ 22.15，内置 zstd 解压；日志在
+      <code>~/.dsh/sessions/&lt;项目目录&gt;/&lt;会话id&gt;/session.v4.jsonl.zstd</code>）——复制这一行：
+    </p>
+    <pre class="frag-diagram-cmd" style="overflow-x:auto"><code>node -e "const z=require('zlib'),f=require('fs');for(const l of z.zstdDecompressSync(f.readFileSync(process.argv[1])).toString('utf8').split('\n')){if(!l)continue;const j=JSON.parse(l),t=new Date(j.time).toLocaleString('sv'),d=j.data||{};if(j.type==='request/header')console.log(t,'HDR',d.header.config.model);else if(j.type==='tool/call'&amp;&amp;/^cabinet_/.test(d.name))console.log(t,'CALL',d.name);else if(j.type==='user/message'&amp;&amp;d.source&amp;&amp;d.source.kind==='user')console.log(t,'USER',JSON.stringify(d.content).slice(0,60))}" "&lt;你的 session.v4.jsonl.zstd 路径&gt;"</code></pre>
+    <p>
+      输出的每一行（<code>时间 HDR 模型</code> / <code>时间 CALL cabinet_*</code> / <code>时间 USER …</code>）就是这张图里一格格的原始数据：
+      按顺序排开、格头挂上模型名，就是你那场会的时间轴。换人是否真的发生，看 <code>HDR</code> 行的模型名变没变即可。
+    </p>
+  </figcaption>
+</figure>

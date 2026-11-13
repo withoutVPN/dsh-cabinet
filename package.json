@@ -1,0 +1,59 @@
+{
+  "name": "dsh-cabinet",
+  "version": "0.8.6",
+  "description": "DSH 插件：内阁 —— 一条对话里多个模型当面争论、出方案，你挑一个，首辅按各人擅长分工、并行开工、首辅亲自验拼接、整合交付",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "multi-model",
+    "multi-agent",
+    "orchestration",
+    "cabinet"
+  ],
+  "license": "MIT",
+  "author": "withoutVPN",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/withoutVPN/dsh-cabinet.git"
+  },
+  "homepage": "https://github.com/withoutVPN/dsh-cabinet#readme",
+  "bugs": {
+    "url": "https://github.com/withoutVPN/dsh-cabinet/issues"
+  },
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "README.md",
+    "DESIGN.md",
+    "docs"
+  ],
+  "scripts": {
+    "smoke": "node smoke.cjs",
+    "check": "node --check index.js && node --check client.js && node smoke.cjs"
+  },
+  "engines": {
+    "dsh": ">=0.1.7-rc.1",
+    "node": ">=22"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ]
+    }
+  }
+}

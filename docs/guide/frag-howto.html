@@ -1,0 +1,11 @@
+<section>
+<h2>三步上手</h2>
+<ol>
+<li><p>设置 → 插件 → 安装本地目录，选 dsh-cabinet 目录。装完应看到插件列表出现「内阁」条目，设置页多出「内阁」面板。</p>
+<p class="trap">列表没出现？确认目录指向含 package.json 的那一层（里面还有 cordis.patch.yml 与 index.js），不是上一层文件夹。</p></li>
+<li><p>设置 → 内阁，填人数（1–8），每人选 provider 和 model，「擅长」栏写一句它会做的事。保存后 $DSH_HOME/cabinet/seats.json 里应能看到席位配置。</p>
+<p class="trap">别手工编辑 seats.json——用记事本保存成带 BOM 的 UTF-8 会让席位被读成 0 个。用设置页面改。</p></li>
+<li><p>回到对话，说「开个内阁讨论一下：你的议题」。首辅开题后把话筒交给阁员；判据：换人时出现 model changed 分隔线，每条回复旁挂着各自的模型名。</p>
+<p class="trap">席位指到没登录的 provider 会导致整条回合静默失败（对话卡住不动）。用当前对话正在用的那个 provider。阁员忘了交话筒时，说「继续」收回首辅。</p></li>
+</ol>
+</section>

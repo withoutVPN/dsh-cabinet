@@ -1,0 +1,184 @@
+<!-- frag-record.html：真实运行记录节选（record 模块交付，拼入 guide 单页）
+     数据来源：本机 2026-11-13 会话日志（~/.dsh/sessions/ 下 session.v4.jsonl.zstd 解压逐行核对）。
+     会话 3fe36041（字符串工具库分工）、会话 6d06b288（本介绍自身的诞生）、质检员子会话 7d2e4934。
+     表内每一行、pre 块里每一段，都能对回日志原文；删节处标 …。 -->
+<section id="record" class="frag-record">
+  <h2>真实运行记录</h2>
+  <p>
+    下面不是示例，是<strong>本机 2026-11-13 当天三段真实记录</strong>：会话 3fe36041
+    （一个字符串工具库从议政到并行交付的完整七阶段）、会话 6d06b288（这份介绍自己的诞生过程）、
+    以及一次 cabinet_audit 的质检员子会话。每行的时间来自日志 <code>time</code> 字段，
+    模型来自 <code>request/header</code> 的 <code>config.model</code>，一字未编。
+  </p>
+
+  <h3>① 时间线（表：时间 / 谁 / 模型 / 动作）</h3>
+  <table class="frag-record-table">
+    <thead>
+      <tr>
+        <th>时间</th>
+        <th>谁</th>
+        <th>模型</th>
+        <th>动作</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>11:58:26</td>
+        <td>首辅</td>
+        <td>deepseek-v4.1-flash</td>
+        <td><code>cabinet_convene</code>：议题「极小字符串工具库：pad(n) 补两位、fmt(a,b) 输出 MM:SS、入口 re-export」，点名三席（务实派 / 挑刺派 / 奇想派）</td>
+      </tr>
+      <tr>
+        <td>11:58:31</td>
+        <td>首辅</td>
+        <td>deepseek-v4.1-flash</td>
+        <td>开题后 <code>cabinet_pass → s1</code>：问 fmt(0,0) 是 "00:00" 还是空串？负数抛错还是照拼？</td>
+      </tr>
+      <tr>
+        <td>11:58:42</td>
+        <td>务实派（s1）</td>
+        <td>deepseek-v4-pro</td>
+        <td>「fmt(0,0) 必须是 "00:00"——零分零秒是合法时间点。负数直接抛错……fmt 里调 pad(a)+":"+pad(b)」，交棒 s2</td>
+      </tr>
+      <tr>
+        <td>11:58:46</td>
+        <td>挑刺派（s2）</td>
+        <td>glm-5.3</td>
+        <td>「fmt(9,75) 照拼出 "09:75" 是假时间，进位成 "10:15" 又悄悄改了分钟——我主张抛错」，交棒 s3</td>
+      </tr>
+      <tr>
+        <td>11:59:00</td>
+        <td>奇想派（s3）</td>
+        <td>qwen3.8-max</td>
+        <td>「fmt 就是个格式化器，不该管语义。"09:75" 是诚实输出；入口显式 export { pad, fmt }」，反问 s1 后交回</td>
+      </tr>
+      <tr>
+        <td>11:59:19</td>
+        <td>务实派（s1）</td>
+        <td>deepseek-v4-pro</td>
+        <td>「负数是类型级无意义，75 秒却只是溢出 MM:SS 视图，照拼是诚实行为」，交回 chair 定调</td>
+      </tr>
+      <tr>
+        <td>11:59:51</td>
+        <td>首辅</td>
+        <td>deepseek-v4-pro</td>
+        <td><code>cabinet_propose</code> 摆出两个方案（务实派方案 / 严格派方案）；11:59:57 <code>cabinet_decide</code> n=1 锁定务实派方案</td>
+      </tr>
+      <tr>
+        <td>12:00:07</td>
+        <td>首辅</td>
+        <td>deepseek-v4-pro</td>
+        <td><code>cabinet_frame</code>：contract 拆 pad / fmt / entry 三模块（moduleSystem: "esm"），静态检查一次通过</td>
+      </tr>
+      <tr>
+        <td>12:00:20</td>
+        <td>首辅</td>
+        <td>deepseek-v4-pro</td>
+        <td><code>cabinet_dispatch</code>（cwd=cab7b）：3 个模块各起独立子会话；12:05:09 收工返回「✓ pad ✓ fmt ✓ entry 全部通过机械检查」</td>
+      </tr>
+      <tr>
+        <td>12:05:45</td>
+        <td>首辅</td>
+        <td>deepseek-v4-pro</td>
+        <td>node 实测：pad(5)=05、fmt(9,5)=09:05、fmt(0,0)=00:00、fmt(9,75)=09:75 —— ALL PASSED（3 个交付文件 12:05:27 落盘）</td>
+      </tr>
+      <tr>
+        <td>10:45（同日另场）</td>
+        <td>三位质检员</td>
+        <td>glm-5.3 / deepseek-v4-pro</td>
+        <td><code>cabinet_audit</code>：✓ pad / ✓ fmt / ✓ entry 各判 ok；证据引 <code>lib/pad.js:6-9</code>，实测 pad(5)="05"、pad(12)="12"（质检员子会话 7d2e4934…）</td>
+      </tr>
+      <tr>
+        <td>12:11:44</td>
+        <td>首辅</td>
+        <td>deepseek-v4.1-flash</td>
+        <td>（会话 6d06b288）<code>cabinet_convene</code>：议题就是「这份介绍怎么写」；12:12:34 <code>cabinet_decide</code> 方案 1 —— 主图用真会议日志机械生成</td>
+      </tr>
+      <tr>
+        <td>12:27:44</td>
+        <td>首辅</td>
+        <td>deepseek-v4.1-flash</td>
+        <td><code>cabinet_frame</code> 拆 diagram / howto / record / page 四模块后 <code>cabinet_dispatch</code> 并行派活；13:12:02 <code>cabinet_audit</code> 复核</td>
+      </tr>
+      <tr>
+        <td>13:43:39</td>
+        <td>首辅</td>
+        <td>deepseek-v4.1-flash</td>
+        <td><code>cabinet_dispatch only=["record","page"]</code> 定向重派 —— 你正在读的这一节，就是这次派出的 record 模块写的</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="frag-record-note">
+    共 14 行。行 1–10 取自会话 3fe36041（2026-11-13 11:58–12:07），行 11 取自同日另一场同题项目的
+    audit 质检员子会话，行 12–14 取自会话 6d06b288。原 brief 中「pad(12)="12"」出自行 11 的 audit
+    证据；3fe36041 主会话的 node 输出为 pad(9)="09" 等（行 10）——两处都是日志原文，分别标注，不混写。
+  </p>
+
+  <h3>② 读者自己怎么复现（对着自己的会话日志看什么）</h3>
+  <ol class="frag-repro">
+    <li>
+      <strong>先找到并解开日志</strong>：<code>~/.dsh/sessions/&lt;项目目录&gt;/&lt;会话id&gt;/session.v4.jsonl.zstd</code>
+      是 zstd 压缩的 JSONL，每行一条事件。Node 一行解开并筛出关键行：
+      <code>node --input-type=module -e "import {zstdDecompressSync} from 'node:zlib'; import {readFileSync} from 'node:fs'; console.log(zstdDecompressSync(readFileSync(process.argv[1])).toString())" 你的日志路径 | findstr "request/header cabinet"</code>
+      （Linux/macOS 把 findstr 换成 grep）。
+    </li>
+    <li>
+      <strong>看模型换没换</strong>：过滤 <code>request/header</code> 行，看 <code>data.header.config.model</code>。
+      真开过多模型内阁，它一定换过不止一次——上表 11:58:26 → 11:58:31 → 11:58:42 → 11:58:46 四条 header
+      就是 flash → pro → glm → qwen 连环换。伴生信号：<code>maxTokens</code> 从 384000 掉到 2000
+      （阁员发言被限预算）。再看 <code>assistant/message</code> 的 <code>source.model</code> 是否跟着变。
+    </li>
+    <li>
+      <strong>看分工是不是真的并行</strong>：找 <code>tool/call</code> 里 <code>name</code> 为
+      <code>cabinet_dispatch</code> 的行和它后面的返回——应打印模块批次（谁写哪些文件）和机械检查 ✓；
+      每个模块一个独立子会话，会话 id 能在 sessions 目录里逐个对上。13:43:39 那行
+      <code>only:["record","page"]</code> 就是定向重派的痕迹：audit 之后只重派不合格的模块。
+    </li>
+  </ol>
+
+  <h3>③ 原始日志节选（就是长这样）</h3>
+  <p>会话 3fe36041 的日志行，字段级摘录（<code>request/header</code> 里完整的 tools 清表与超长参数以 … 删节，字段名与值未改；← 后是本页加的注释）：</p>
+  <pre class="frag-record-raw">{"type":"request/header","seq":13,"time":1794542302710,"data":{"header":{"config":{"provider":"qwen-token-plan-cn","model":"deepseek-v4.1-flash","reasoningEffort":"high","maxTokens":384000},"tools":[…]}…}}
+{"type":"tool/call","seq":24,"time":1794542306268,"data":{…,"name":"cabinet_convene","arguments":"{\"topic\":\"做一个极小的字符串工具库：pad(n) 补到两位，fmt(a,b) 输出 'MM:SS'，入口 re-export 两者。\",\"seats\":[…]…}"}}
+{"type":"tool/call","seq":31,"time":1794542311932,"data":{…,"name":"cabinet_pass","arguments":"{\"to\":\"s1\",\"ask\":\"先别写代码：fmt(0,0) 是 …\"}"}}
+{"type":"request/header","seq":36,"time":1794542311950,"data":{…,"model":"deepseek-v4-pro","maxTokens":2000,…}}   ← 话筒交给务实派：换模型了
+{"type":"tool/call","seq":39,"time":1794542322563,"data":{…,"name":"cabinet_pass","arguments":"{\"to\":\"s2\",\"ask\":\"fmt(0,0)=…\"}"}}
+{"type":"request/header","seq":44,"time":1794542322579,"data":{…,"model":"glm-5.3","maxTokens":2000,…}}   ← 换人：挑刺派
+{"type":"tool/call","seq":47,"time":1794542326553,"data":{…,"name":"cabinet_pass","arguments":"{\"to\":\"s3\",\"ask\":\"务实派和我在吵秒数超界该进位还是抛错…\"}"}}
+{"type":"request/header","seq":52,"time":1794542326568,"data":{…,"model":"qwen3.8-max","maxTokens":2000,…}}   ← 换人：奇想派
+…（5 轮交棒、propose、decide 略）…
+{"type":"tool/call","seq":84,"time":1794542407651,"data":{…,"name":"cabinet_frame","arguments":"{\"contract\":{\"goal\":\"极简字符串工具库，纯 ESM，入口 re-export 两个函数\",\"moduleSystem\":\"esm\",\"modules\":[…]…}"}}
+{"type":"tool/call","seq":91,"time":1794542420039,"data":{…,"name":"cabinet_dispatch","arguments":"{\"cwd\":\"D:\\\\…\\\\cab7b\"}"}}</pre>
+
+  <p>工具的文本返回可以整段引用。dispatch 收工返回（12:05:09，节选）：</p>
+  <pre class="frag-record-raw">分工（3 个模块）
+· pad　务实派（deepseek-v4-pro）　补零　写 lib/pad.js
+· fmt　挑刺派（glm-5.3）　时间格式　写 lib/fmt.js　等 pad 先交
+· entry　奇想派（qwen3.8-max）　入口　写 lib/index.js　等 pad、fmt 先交
+
+第 1 批：pad → 务实派（deepseek-v4-pro）
+第 2 批：fmt → 挑刺派（glm-5.3）
+第 3 批：entry → 奇想派（qwen3.8-max）
+派活完成（3 个模块，模型：deepseek-v4-pro / glm-5.3 / qwen3.8-max）
+
+✓ pad（s1）　lib/pad.js
+✓ fmt（s2）　lib/fmt.js
+✓ entry（s3）　lib/index.js
+
+全部通过机械检查。下一步：按 integration 把模块接到入口，跑一次构建/测试，然后 cabinet_integrate 交付。</pre>
+
+  <p>主会话收尾的 node 实测（12:05:45，tool/result 原文）：</p>
+  <pre class="frag-record-raw">pad(5)= 05
+pad(9)= 09
+fmt(9,5)= 09:05
+fmt(0,0)= 00:00
+fmt(9,75)= 09:75
+ALL PASSED</pre>
+
+  <p>同日另一场同题项目的 cabinet_audit 返回（质检员子会话 7d2e4934…，节选——质检员用的是没参与该模块的席位模型）：</p>
+  <pre class="frag-record-raw">✓ pad 质检员 挑刺派：ok
+   依据：读 lib/pad.js:6-9：`export function pad(n)`，实现为 `String(Math.trunc(Math.abs(n))).padStart(2, '0')`。
+   运行时验证：import 后 Object.keys 为 ['pad']；pad(5) 返回 "05"，pad(12) 返回 "12"，与验收标准逐字吻合。
+✓ fmt 质检员 务实派：ok
+✓ entry 质检员 务实派：ok</pre>
+</section>
