@@ -122,20 +122,28 @@ debate ──(你挑方案)──> decided ──(frame 通过)──> framed �
 
 ```json
 { "goal": "…",
+  "moduleSystem": "esm",
   "modules": [{ "id": "add", "title": "加法模块", "seat": "s1",
                 "writes": ["lib/a.js"],
-                "exports": [{ "kind": "symbol", "from": "lib/a.js", "name": "add" }],
-                "imports": [{ "from": "mul", "symbol": "mul" }],
+                "exports": [{ "kind": "symbol", "from": "lib/a.js",
+                              "name": "add", "signature": "add(a: number, b: number): number" }],
+                "imports": [{ "from": "mul", "symbol": "mul",
+                              "signature": "mul(a: number, b: number): number",
+                              "specifier": "./mul.js" }],
                 "acceptance": ["导出 add(a,b)"] }],
-  "integration": { "entry": "lib/index.js", "how": "re-export 两个模块" } }
+  "integration": { "entry": "lib/index.js", "how": "re-export 两个模块" },
+  "verify": { "module": "node -e \"import('./{file}').then(m => m.add(1,2) === 3)\"",
+              "all": "node -e \"import('./{entry}').then(m => m.add(1,2) === 3)\"" } }
 ```
 
-3. **提交那一刻就跑 5 项静态检查**（纯函数，不花模型钱）：写域两两不相交 / imports 指向的模块真的承诺了那个出口 / `exports[].path` 落在自己的写域内 / 依赖图无环 / 入口唯一。有硬错误直接退回，逐条列出哪里拼不上。
-4. 你点头 → `cabinet_dispatch`：每个模块一个**独立子会话**，用它**被指派那位阁老**的模型（不是首辅的模型在替所有人写）。**批次按 imports 依赖推**：谁都不等谁的那些先开（一批最多 5 个），`fmt` 依赖 `pad` 就等 `pad` 交出真实文件再动手 —— 不让谁对着还不存在的接口盲写。开工前先把分工表摆出来（哪个模块、谁做、擅长什么、写哪些文件、等谁先交）。每个子会话都被明确告知：你是谁、自己的写域、别人的地盘一个字别动、别人承诺的出口是什么形状、做完按 schema 回报。
-5. 收齐后自动做**机械验收**：文件在不在、有没有越界写、承诺导出的 symbol 有没有真出现（正则核对 `export function/const/class <name>` 与 `export {…}`）、回执说 done 了没有。不合格的模块标 `blocked` 并给出具体差异 —— 这些差异就是"拼不上"的位置。
-6. 返工**只重派失败的那几个**：`cabinet_dispatch({ only: ["mul"] })`。
-7. 全绿后 `cabinet_audit`：**由首辅本人验收**（首辅这一场用的模型，从 `chairCfg` 取），只看"别人按契约接上去会不会断"（签名、命名、单位、错误处理、字段名），不看风格。它交白卷（没有 verdict）会被重问一次；仍然交白卷就明写"这条没被真正审过"——**"没审"不会被说成"没问题"**，收尾会报"3/2 审过、1 个没审"。
-8. `cabinet_integrate` 交付。
+3. **提交那一刻就跑静态检查**（纯函数，不花模型钱）：模块 id 唯一 / 写域两两不相交 / 每个 symbol 出口都写了 `from` + `signature` / imports 的签名与目标出口**归一化后逐字相等** / imports 的 `specifier` 以 `.` 开头且真能解析到目标文件 / 出口的落点（`file` 和 `symbol` 都查）必须在自己写域内 / **出口名跨模块不能重名**（入口 `export *` 会变成歧义）/ 依赖图无环 / **入口必须有人接**（落在某模块写域，或 `integration.owner: "chair"` 明写首辅自己接）/ **`verify.all` 必填**。有硬错误直接退回，逐条列出哪里拼不上、差在哪个参数。
+4. **先落骨架，再派活**：`cabinet_dispatch` 在起子会话前由插件自己写 `contract.json`、每个出口的 stub（签名 + `throw new Error('cabinet stub: … 还没实现')`）、入口聚合文件，必要时补 `package.json`。**已存在的文件绝不覆盖**：目标文件一定存在，写的时候就编译得过。
+5. 你点头 → `cabinet_dispatch`：每个模块一个**独立子会话**，用它**被指派那位阁老**的模型（不是首辅的模型在替所有人写）。**批次按 imports 依赖推**：谁都不等谁的那些先开（一批最多 5 个），`fmt` 依赖 `pad` 就等 `pad` 交出真实文件再动手 —— 不让谁对着还不存在的接口盲写。开工前先把分工表摆出来（哪个模块、谁做、擅长什么、写哪些文件、等谁先交）。每个子会话都被明确告知：你是谁、自己的写域、别人的地盘一个字别动、每个出口的**签名原文**与每条依赖的**现成 specifier**、做完跑 `verify.module` 并把 `checks` 写进回执。
+6. 收齐后自动做**机械验收**：文件在不在、有没有越界写、承诺导出的 symbol 有没有真出现、**代码里真写下的每个相对 import 是否落在写域或 declared 依赖的出口上**（自己猜路径拼错的，这一条就拦住）。不合格的模块标 `blocked` 并给出具体差异 —— 这些差异就是"拼不上"的位置。
+7. 全绿后按 `verify.all` **真跑一次拼装**（不是读文本猜）：退出码非 0 直接 blocked 并贴 stdout/stderr 尾巴；只有 `verify.ok === true` 才允许下一步。
+8. `cabinet_audit`：**由首辅本人验收**（首辅这一场用的模型，从 `chairCfg` 取），只看"别人按契约接上去会不会断"（签名、命名、单位、错误处理、字段名），不看风格。它交白卷（没有 verdict）会被重问一次；仍然交白卷就明写"这条没被真正审过"——**"没审"不会被说成"没问题"**，收尾会报"3/2 审过、1 个没审"。
+9. `cabinet_integrate` 交付：**没有真跑过的验收结果直接拒绝**；`ok === null`（manual 模式）要求首辅自己写清验过什么；**合约里有模块没派过（只跑过 `only` 的一部分）也拒绝**。
+10. 返工**只重派失败的那几个**：`cabinet_dispatch({ only: ["mul"] })`。
 
 **为什么不是让首辅自由发挥**：并行最容易死在"各干各的、拼不上"。所以写哪里、交什么、依赖谁，必须先变成数据、先被机械校验过；能机械查出来的，绝不让模型去猜。
 
@@ -161,6 +169,13 @@ debate ──(你挑方案)──> decided ──(frame 通过)──> framed �
 - **`/models` 的返回形状别想当然**（0.8.2 修）：宿主给的是模型对象，客户端却按 `m.id / m.name` 取——本来没问题，但服务端把每项压成了字符串 `String(m?.id ?? m?.model ?? m)`，于是下拉框里 `value` 和文案全是 `undefined`，**渲染出一排空白项**。现在服务端统一回 `{id,name}` 并带上 provider 的友好名，客户端还做了兜底（字符串也认、当前值不在列表时补一条「（当前）」、provider 没报模型列表时改成手填输入框），保存前也会拦下空 model。
 - **派活的工作区必须显式给**：`ToolRunContext` 上没有 `cwd`，`process.cwd()` 在桌面版里就是 `$DSH_HOME/profiles/desktop`——第一轮 dispatch 就把四个文件写进了 DSH 自己的配置目录，而机械验收在同一个错目录里核对，于是"全部通过"。现在解析顺序是 `args.cwd → 本场会记住的 cwd → 会话 meta.cwd`，并且**只要落在 `$DSH_HOME` 里就直接拒绝执行**，让你显式传项目目录。
 - **契约里的"背景材料"（`brief`）必须自己先核对**：我凭记忆写了几行"日志原文"给 record 模块，它照着编进了"真实运行记录"，被质检逐条对日志抓出来（`turn:3` 那次 completed 比 convene 早两小时、三条 MSG 在全部会话里 0 命中）。凡是标"原样摘录"的东西，派活前先自己 grep 一遍。
+- **0.9 修的三件事，都是 0.8.6 真踩过的**：① 出口只写名字不写形状，`render(el, data)` 被当成 `render(data)` 调，静态检查看着全对；现在 `signature` 必填、逐字比对。② 入口没人认领，验收之后才手写，从来没被审过；现在入口无主直接退回，或明写 `owner: "chair"` 由首辅接。③ 验收只读文本不跑代码，第一次 `import` 发生在交付之后；现在按 `verify.all` 真跑，不跑过不许交付。
+- **stub 是插件替你先落的**：每个出口文件里那句 `throw new Error('cabinet stub: … 还没实现')` 是脚手架写的，阁老必须把它换成实现；模块自检和整体 `verify.all` 都会当场炸——这正是 0.9 想要的"写的时候就编译得过，跑的时候就露馅"。
+- **0.9.1 自审补的洞**：① 出口名跨模块重名（入口 `export *` 歧义，两边单测都绿、一 import 就炸）现在在提交契约时直接拦；② symbol 出口的 `from` 以前不查写域归属，只在收活时以"越界/缺文件"暴露，现在提交时就报；③ 签名解析认 `render: (a, b) => T`、`async f()`、`map<T>(…)` 这几种写法，回调参数 `cb: (x) => void` 里的 `=>` 也不再切乱参数；④ `cabinet_integrate` 补齐"有模块压根没派过就交付"的闸门；⑤ 只重派部分模块时，收尾按**整张表**判"全部通过"，不会被这一批全绿骗过去。
+- **type / interface 出口（0.9.2 起支持）**：写成 `{"kind":"type","name":"TreeNode","from":"types.ts","signature":"type TreeNode = { id: string }"}`，只许落在 `.ts/.tsx/.mts/.cts` 文件里；骨架会落一个 `export type TreeNode = never`（**不是**运行时 stub，探针也不会去调用它）；依赖方的 `signature` 归一化后必须与它逐字相等。JS 项目里没有类型出口这回事，写进去会直接被拦。
+- **0.9.2 另外两刀**：① 真跑改成异步 `spawn` 并带超时终止（Windows 上补 `taskkill /T`）——以前 `spawnSync` 跑一条 `npm test` 会把整个宿主卡住最长 240 秒；② 模块自检模板若用 `{file}`，模块交了几个代码文件就逐个跑几遍，不再只探第一个（只探第一个时，第二个文件里坏掉的 import 永远没人发现）。
+- **import 路径要照抄契约给的 `specifier`**：`./a.js` 还是 `../lib/a.js`，从不同文件出发不一样；收活时会读代码里真写下的相对路径，指到不存在的文件或别人的地盘就 blocked。
+- **声明了依赖，代码里却一次都没出现那个符号 → 收活直接算错（0.9.2）**：契约上接得再漂亮，运行时没写 `import` 就是没接上。它拦不住"import 了却没用/用错"，那归质检员；但拦得住"压根没接"。
 - 改了 `index.js` 之后宿主不会自动重载，要 `set_plugin` 关一次再开一次（见下）。
 
 ## 图文介绍（这份介绍是内阁做的）

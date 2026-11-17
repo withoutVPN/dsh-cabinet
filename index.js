@@ -22,13 +22,33 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
+import {
+  BUILD,
+  checkContract,
+  checkDelivery,
+  detectModuleSystem,
+  exportKeys,
+  findExport,
+  findModule,
+  fill,
+  globRoot,
+  inside,
+  normPath,
+  normSig,
+  overlap,
+  parseSignature,
+  runModuleVerify,
+  runVerify,
+  scaffold,
+  seatIssuesOf,
+  signatureDiff,
+} from './lib/contract.js'
 
 export const name = 'cabinet'
 export const inject = ['tools', 'systemPrompt', 'webServer']
 
 const HOME = join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'cabinet')
 /** 打包号：只在需要确认宿主是否重载了本模块时才有用（GET /api/cabinet/state 会带出来） */
-const BUILD = '0.8.6'
 const SEATS_FILE = join(HOME, 'seats.json')
 const DEBATES_FILE = join(HOME, 'debates.json')
 const MAX_SEATS = 8
@@ -424,176 +444,10 @@ async function seatAgentOptions(ctx, seat) {
  * 写成数据（contract），这些检查全是纯函数、不花模型钱 —— 能机械查出来的，绝不问模型。
  */
 
-const normPath = (p) => String(p || '').replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '')
-/** 把 `src/render/**` 这种写域收敛成目录前缀 `src/render` */
-const globRoot = (g) => normPath(g).replace(/\/\*\*?$/, '').replace(/\*.*$/, '').replace(/\/$/, '')
-
-function overlap(a, b) {
-  const A = globRoot(a)
-  const B = globRoot(b)
-  if (!A || !B) return false
-  return A === B || A.startsWith(`${B}/`) || B.startsWith(`${A}/`)
-}
-
-function inside(file, glob) {
-  const f = normPath(file)
-  const g = globRoot(glob)
-  return !!g && (f === g || f.startsWith(`${g}/`))
-}
-
-/** 出口/依赖能不能被机械地验收：只认 file 与 symbol 两种 kind */
-function exportKeys(mod) {
-  const out = []
-  for (const e of Array.isArray(mod?.exports) ? mod.exports : []) {
-    if (!e) continue
-    if (e.kind === 'file' && e.path) out.push(`file:${normPath(e.path)}`)
-    if (e.kind === 'symbol' && e.name) out.push(`symbol:${String(e.name)}`)
-  }
-  return out
-}
-
-function findModule(contract, id) {
-  return (contract?.modules || []).find((m) => String(m?.id) === String(id)) || null
-}
-
-/** 开工前 5 项静态检查。返回 [{ level:'error'|'warn', msg, where }] */
-function checkContract(contract) {
-  const issues = []
-  const bad = (where, msg) => issues.push({ level: 'error', where, msg })
-  const mods = Array.isArray(contract?.modules) ? contract.modules : []
-  if (!mods.length) bad('contract', '没有任何模块：至少要有 1 个')
-  if (!contract?.integration?.entry) bad('contract', '缺少 integration.entry（最终接在哪个文件）')
-
-  // 1) 写域两两不相交
-  for (let i = 0; i < mods.length; i++) {
-    for (let j = i + 1; j < mods.length; j++) {
-      for (const a of mods[i].writes || []) {
-        for (const b of mods[j].writes || []) {
-          if (overlap(a, b)) bad(`${mods[i].id}/${mods[j].id}`, `写域重叠：「${mods[i].id}」的 ${a} 与「${mods[j].id}」的 ${b} 会互相覆盖（并行安全的前提是写域不相交）`)
-        }
-      }
-    }
-  }
-
-  // 2) 依赖可满足：imports 指向真实模块，且对方 exports 真有该 symbol/file
-  for (const m of mods) {
-    for (const imp of m.imports || []) {
-      const target = findModule(contract, imp?.from)
-      if (!target) { bad(m.id, `依赖的模块 "${imp?.from}" 不存在`); continue }
-      const keys = exportKeys(target)
-      if (imp.symbol && !keys.includes(`symbol:${imp.symbol}`) && !keys.includes(`file:${normPath(imp.symbol)}`)) {
-        bad(m.id, `依赖 ${imp.from} 的 "${imp.symbol}"，但它没有在 exports 里承诺这个出口`)
-      }
-    }
-  }
-
-  // 3) 导出路径落在自己的写域里
-  for (const m of mods) {
-    for (const e of m.exports || []) {
-      if (e?.kind !== 'file' || !e.path) continue
-      const own = (m.writes || []).some((w) => inside(e.path, w))
-      if (!own) bad(m.id, `导出的文件 ${e.path} 不在自己的 writes 里 —— 交出来的东西必须是它写过的`)
-    }
-  }
-
-  // 4) 依赖图无环
-  const state = new Map()
-  const visit = (id, stack) => {
-    if (state.get(id) === 'done') return
-    if (state.get(id) === 'doing') { bad(id, `依赖成环：${[...stack, id].join(' → ')}`); return }
-    state.set(id, 'doing')
-    const m = findModule(contract, id)
-    for (const imp of m?.imports || []) if (findModule(contract, imp?.from)) visit(String(imp.from), [...stack, id])
-    state.set(id, 'done')
-  }
-  for (const m of mods) visit(String(m.id), [])
-
-  // 5) 入口唯一：integration.entry 必须落在某个模块的写域里，且只能落一个
-  if (contract?.integration?.entry) {
-    const owners = mods.filter((m) => (m.writes || []).some((w) => inside(contract.integration.entry, w)))
-    if (owners.length === 0) {
-      issues.push({ level: 'warn', where: 'integration', msg: `入口 ${contract.integration.entry} 不在任何模块的写域里 —— 那就得由你（首辅）自己接` })
-    } else if (owners.length > 1) {
-      bad('integration', `入口 ${contract.integration.entry} 同时属于 ${owners.map((m) => m.id).join('、')} 的写域`)
-    }
-  }
-  return issues
-}
-
-/** 分工检查：每个模块必须落到一位**真实存在**的阁老头上，而且别把活堆给同一个人 */
-function seatIssuesOf(d, contract) {
-  const issues = []
-  const mods = (contract?.modules || [])
-  const seats = d?.seats || []
-  const ids = new Set(seats.map((s) => String(s.id)))
-  for (const m of mods) {
-    const id = String(m?.id ?? '?')
-    if (!m.seat) {
-      issues.push({ level: 'error', where: id, msg: '没有指派席位（seat）—— 每个模块必须交给一位阁老，不能留在"谁有空谁写"' })
-    } else if (!ids.has(String(m.seat))) {
-      issues.push({ level: 'error', where: id, msg: `席位 "${m.seat}" 不在这次的内阁里（现有：${seats.map((s) => s.id).join(' / ')}）` })
-    }
-  }
-  // 按擅长分，不是轮着分：有人背两个、却有人一个都没有时提醒一句
-  const load = new Map(seats.map((s) => [String(s.id), 0]))
-  for (const m of mods) if (load.has(String(m.seat))) load.set(String(m.seat), load.get(String(m.seat)) + 1)
-  const idle = [...load.entries()].filter(([, n]) => n === 0).map(([id]) => id)
-  const heavy = [...load.entries()].filter(([, n]) => n > 1).map(([id, n]) => `${id}×${n}`)
-  if (idle.length && heavy.length) {
-    issues.push({
-      level: 'warn', where: 'seats',
-      msg: `${heavy.join('、')} 一个人扛了多块，而 ${idle.join('、')} 一块没有 —— 按各自擅长分，别把活堆给同一个人`,
-    })
-  }
-  return issues
-}
-
-/** 文件用的是哪套模块系统（ESM / CommonJS）—— 两套混用是所有"拼不上"里最难查的一种 */
-function detectModuleSystem(text) {
-  const esm = /^\s*(export|import)\b/m.test(text)
-  const cjs = /\bmodule\.exports\b|\bexports\.[A-Za-z_$]|\brequire\s*\(/.test(text)
-  if (esm && !cjs) return 'esm'
-  if (cjs && !esm) return 'cjs'
-  if (esm && cjs) return 'mixed'
-  return 'unknown'
-}
-
-/** 收活后的机械检查：文件在不在、写域越没越界、承诺的 export 有没有真的出现 */
-function checkDelivery(cwd, mod, receipt) {
-  const issues = []
-  const files = Array.isArray(receipt?.files) ? receipt.files.map(normPath) : []
-  if (!files.length) issues.push({ level: 'error', where: mod.id, msg: '回执里没有任何文件（files 为空）' })
-  for (const f of files) {
-    if (!(mod.writes || []).some((w) => inside(f, w))) {
-      issues.push({ level: 'error', where: mod.id, msg: `越界写入：${f} 不在写域 ${(mod.writes || []).join(' / ')} 内` })
-    }
-    try {
-      const text = readFileSync(join(cwd, f), 'utf8')
-      if (!text.trim()) issues.push({ level: 'error', where: mod.id, msg: `文件是空的：${f}` })
-      const sys = detectModuleSystem(text)
-      for (const e of mod.exports || []) {
-        if (e?.kind !== 'symbol' || !e.name) continue
-        const esmRe = new RegExp(`(export\\s+(default\\s+)?(async\\s+)?(function|class|const|let|var)\\s+${e.name}\\b)|(export\\s*\\{[^}]*\\b${e.name}\\b)`)
-        // CommonJS 也认：整份项目统一用 CJS 时它是合法的（混用才由下面的跨模块检查抓）
-        const cjsRe = new RegExp(`(module\\.exports\\s*=\\s*\\{[^}]*\\b${e.name}\\b[^}]*\\})|(exports\\.${e.name}\\s*=)|(module\\.exports\\s*=\\s*${e.name}\\b)`)
-        const own = files.includes(normPath(e.from || e.path || ''))
-        if (own && !esmRe.test(text) && !cjsRe.test(text)) {
-          issues.push({
-            level: 'error',
-            where: mod.id,
-            msg: sys === 'mixed'
-              ? `${f} 里 ESM 和 CommonJS 混着用，而且找不到承诺的出口 ${e.name} —— 这种文件谁 import 都会出问题。`
-              : `承诺的出口没出现：${e.name}（在 ${e.from || e.path}，既没有 ESM 的 export，也没有 module.exports 出来）`,
-          })
-        }
-      }
-    } catch {
-      issues.push({ level: 'error', where: mod.id, msg: `文件不存在：${f}` })
-    }
-  }
-  if (receipt?.done === false) issues.push({ level: 'error', where: mod.id, msg: '它自己报告没干完（done=false）' })
-  return issues
-}
+/* 纯逻辑（契约形状、写域、接线路径、骨架、跑命令）都搬到了 lib/contract.js：
+ * 那里能在没有宿主的情况下被 node test/contract.test.mjs 真跑一遍 ——
+ * 0.8.6 的教训是，只写在插件里、只能靠开会撞见的检查，等于没有。
+ */
 
 /** 挑一个 subagent 后端：优先能指定 agentOptions 的（那样才换得动模型） */
 function pickBackend(ctx) {
@@ -613,6 +467,20 @@ const RECEIPT_SCHEMA = {
     moduleId: { type: 'string' },
     done: { type: 'boolean' },
     files: { type: 'array', items: { type: 'string' } },
+    // 跑了什么、结果如何 —— 空口说"验证过了"不算，有命令和退出码才算
+    checks: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          cmd: { type: 'string' },
+          ok: { type: 'boolean' },
+          out: { type: 'string' },
+        },
+        required: ['cmd', 'ok'],
+        additionalProperties: false,
+      },
+    },
     notes: { type: 'string' },
   },
   required: ['moduleId', 'done', 'files'],
@@ -1220,7 +1088,10 @@ export function apply(ctx) {
         '',
         '下一步是你出**框架**（不是散文，是数据）：把交付物拆成几个模块，每个模块写清',
         '· 派给谁（seat）、独占的写域（writes）、要交出来的东西（exports）、依赖别人的什么（imports）、怎么算合格（acceptance）；',
-        '· 外加 integration.entry：最后把东西接到哪个入口文件。',
+        '· 每个 symbol 出口必须带**一行签名**（`add(a: number, b: number): number`）和它所在的 `from` 文件；',
+        '· 每条 import 必须带同一个签名 + **实际 import 路径**（specifier，如 `./adder.js`）—— 别让写的人自己猜路径；',
+        '· 外加 integration.entry（最后接哪个入口；没人接就写 `owner:"chair"`，插件会先落骨架）；',
+        '· 外加 verify.all：**拼完怎么算"能跑"**（`"node {entry}"`，或 `{"manual":"打开 index.html 点一遍"}`）。这条必填 —— 0.8.6 那次"全部报错"，就是因为交付前没人真跑过。',
         '',
         '**分工是这一步的全部重点**：按每位阁员的擅长（见下表）分，不要轮流分。',
         ...d.seats.map((s) => `· ${s.id} ${s.label}（${s.model}）${s.skill ? `：擅长 ${s.skill}` : '：（没写擅长什么）'}`),
@@ -1236,11 +1107,11 @@ export function apply(ctx) {
   tool({
     name: 'cabinet_frame',
     description: '提交机器可读的框架（接口契约）。提交后立刻跑静态检查；不通过会逐条告诉你哪里拼不上。'
-      + '这是"能不能并行"的判据：写域不相交 + 依赖可满足 + 无环 + 入口唯一。',
+      + '这是"能不能并行"的判据：写域不相交 + 出口有签名 + 依赖形状一致 + import 路径对得上 + 无环 + 入口有主 + 有验收命令。',
     properties: {
       contract: {
         type: 'object',
-        description: '框架本身。modules[] 每人一条；integration.entry 是最终入口',
+        description: '框架本身。modules[] 每人一条（exports 带 from+signature，imports 带 signature+specifier）；integration.entry 是最终入口；verify.all 是拼装验收命令',
         additionalProperties: true,
       },
     },
@@ -1281,12 +1152,14 @@ export function apply(ctx) {
         '**分工（这才是重点，先让用户看这个）**',
         ...mods.map((m) => {
           const dep = (m.imports || []).map((i) => String(i.from)).filter((id) => allIds.includes(id) && id !== String(m.id))
+          const expText = (m.exports || []).map((e) => (e?.kind === 'file' ? e.path : `${e?.signature || e?.name}（from ${e?.from || '?'}）`)).join(' / ')
           return `· ${m.id}${m.title ? ` ${m.title}` : ''} → ${seatName(m.seat)}`
             + `　写 ${(m.writes || []).join(' / ') || '（未指定）'}`
-            + `　交 ${exportKeys(m).map((k) => k.replace(/^(file|symbol):/, '')).join(' / ') || '（无）'}`
+            + `　交 ${expText || '（无）'}`
             + (dep.length ? `　等 ${dep.join('、')} 先交` : '')
         }),
-        `· 入口：${contract.integration?.entry}${contract.integration?.how ? `（${contract.integration.how}）` : ''}`,
+        `· 入口：${contract.integration?.entry}${contract.integration?.owner === 'chair' ? '（首辅认领，插件先落骨架）' : ''}${contract.integration?.how ? `（${contract.integration.how}）` : ''}`,
+        `· 拼装验收：${typeof contract.verify?.all === 'string' ? contract.verify.all : contract.verify?.all?.manual ? `人工 —— ${contract.verify.all.manual}` : '（没写）'}`,
         issues.length ? `\n另有 ${issues.length} 条提醒：\n${issues.map((i) => `! [${i.where}] ${i.msg}`).join('\n')}` : '',
         '',
         '**停在这里等用户确认框架**：把上面这份分工贴给他看（谁做哪块、各自写哪些文件、谁等谁），说"确认就开工"。用户点头后调 cabinet_dispatch。',
@@ -1346,6 +1219,10 @@ export function apply(ctx) {
           '先把目录建好再派活：要么在项目根目录跑，要么显式传一个已存在的 cwd。',
         ].join('\n')
       }
+      // 0.9：起子会话之前，先把"拼得上"落成文件 —— contract.json、每个出口的 stub、
+      // 入口聚合文件、必要时 package.json。这样"目标文件不存在/入口没人接"在写第一行
+      // 代码前就消失了；已存在的文件绝不覆盖，返工重派因此是幂等的。
+      const pre = scaffold(cwd, d.contract)
       d.cwd = cwd
       const only = Array.isArray(args.only) && args.only.length ? new Set(args.only.map(String)) : null
       const mods = (d.contract.modules || []).filter((m) => !only || only.has(String(m.id)))
@@ -1376,6 +1253,9 @@ export function apply(ctx) {
         ? { ...d.dispatch, cwd, lastDispatchAt: Date.now(), modules: d.dispatch.modules }
         : { startedAt: Date.now(), cwd, modules: {} }
       d.dispatch.startedAt = d.dispatch.startedAt || Date.now()
+      d.dispatch.scaffold = pre
+      // 拼装变了，上一次的整体验收结论就作废；重派后必须重新跑
+      if (only || d.dispatch.verify) d.dispatch.verify = null
       const out = []
       const results = []
       const CONCURRENCY = 5
@@ -1404,6 +1284,12 @@ export function apply(ctx) {
       let roundNo = 0
 
       // 先让用户一眼看清"谁负责哪块" —— 这是他最该看的东西，比任何辩论都重要。
+      out.push(pre.created.length
+        ? `骨架先落好了（${pre.created.length} 个新文件：${pre.created.join('、')}${pre.kept.length ? `；沿用已有 ${pre.kept.length} 个` : ''}）`
+        : `骨架已就位（沿用已有 ${pre.kept.length} 个文件，没覆盖任何实现）`)
+      out.push(pre.entryCreated ? `· 入口 ${pre.entry} 是插件生成的聚合文件，模块出口已接到这里，谁也不用猜路径` : `· 入口 ${pre.entry} 已存在，按原样用`)
+      if (pre.moduleSystem === 'cjs') out.push('· 模块系统：CommonJS（require / module.exports）')
+      out.push('')
       out.push(`分工（${runnable.length} 个模块）`)
       for (const m of runnable) {
         const dep = depsOf(m)
@@ -1475,9 +1361,21 @@ export function apply(ctx) {
           rec.stopReason = String(res?.stopReason || '')
           rec.diagnostic = String(res?.diagnostic || '')
           const found = [
-            ...checkDelivery(cwd, m, receipt),
+            ...checkDelivery(cwd, m, receipt, d.contract),
             ...(receipt ? [] : [{ level: 'error', where: m.id, msg: `没有拿到结构化回执（stopReason=${res?.stopReason}${res?.diagnostic ? `, ${res.diagnostic}` : ''}）` }]),
           ]
+          // 0.9：契约给了每块的验证命令，就真跑一次 —— 收的是"跑过"的活，不是"读起来对"的活
+          const vmod = d.contract?.verify?.module
+          if (vmod && rec.files.length) {
+            const code = rec.files.filter((f) => /\.(m?js|cjs)$/i.test(f))
+            if (code.length) {
+              // 0.9.2：模板用 {file} 时逐文件跑 —— 一个模块交三个文件，只探第一个等于没探。
+              const vr = await runModuleVerify(cwd, vmod, code)
+              rec.verify = vr
+              d.dispatch.verifyModules = { ...(d.dispatch.verifyModules || {}), [m.id]: vr }
+              if (!vr.ok) found.push({ level: 'error', where: m.id, msg: `模块自检没跑过：${vr.cmd}\n${vr.out}` })
+            }
+          }
           rec.issues = found
           rec.status = found.length ? 'blocked' : 'done'
           // 交了的模块要立刻进 doneIds：下一轮里"依赖它"的模块才有资格开工。
@@ -1514,7 +1412,9 @@ export function apply(ctx) {
         }
       }
 
-      const stillBad = results.filter((r) => r.status !== 'done')
+      // 注意：这里看的是**整张表**，不是这一批 results —— 只重派其中几块时，
+      // 别的模块可能还 blocked，不能因为这一批全绿就说"全部通过"。
+      const stillBad = Object.values(d.dispatch.modules).filter((r) => r && r.status !== 'done')
       // 项目级声明检查：三个文件彼此一致不等于"这个项目认它们是 ESM"。
       // 目录里没有 package.json 时，Node 靠语法探测（≥22.7 才行）；带 "type":"commonjs"
       // 的包里，export/import 立刻全炸。这种跨文件的锅，没有任何模块的写域认领。
@@ -1541,7 +1441,26 @@ export function apply(ctx) {
       }
       if (pkgNote) d.dispatch.packageNote = pkgNote
 
-      d.status = stillBad.length ? 'blocked' : 'integrating'
+      // 0.9：模块都过了静态检查，再按契约真跑一次"拼装验收"。
+      // 这是唯一能回答"拼上了没有"的东西 —— 以前这里只有首辅的一句 verified。
+      let overall = null
+      const vAll = d.contract?.verify?.all
+      if (!stillBad.length && vAll) {
+        if (typeof vAll === 'string') {
+          overall = await runVerify(cwd, vAll, {
+            entry: normPath(d.contract.integration?.entry || ''),
+            files: Object.values(d.dispatch.modules).flatMap((r) => r?.files || []).join(' '),
+            cwd,
+          })
+          overall.at = Date.now()
+          d.dispatch.verify = overall
+        } else {
+          overall = { manual: String(vAll.manual || ''), ok: null, at: Date.now() }
+          d.dispatch.verify = overall
+        }
+      }
+      const verifyFailed = Boolean(overall && overall.ok === false)
+      d.status = stillBad.length || verifyFailed ? 'blocked' : 'integrating'
       d.touchedAt = Date.now()
 
       out.push(`派活完成（${results.length} 个模块，模型：${[...new Set(results.map((r) => d.seats.find((s) => s.id === r.seat)?.model).filter(Boolean))].join(' / ')}）`)
@@ -1551,9 +1470,23 @@ export function apply(ctx) {
         for (const i of r.issues) out.push(`   - [${i.where}] ${i.msg}`)
       }
       out.push('')
+      if (overall) {
+        if (typeof overall.ok === 'boolean') {
+          out.push(`${overall.ok ? '✓' : '✗'} 拼装验收：${overall.cmd}　（${overall.ok ? '整体跑通' : `退出码 ${overall.code}`}）`)
+          if (!overall.ok) {
+            out.push('   这就是"到底哪里拼不上"的原话：')
+            out.push(...String(overall.out || '').split('\n').map((l) => `   ${l}`))
+          }
+        } else {
+          out.push(`· 拼装验收按约定是人工的：${overall.manual} —— 交付时在 verified 里写你实际看到的结果，别写"应该没问题"。`)
+        }
+      }
+      out.push('')
       out.push(stillBad.length
-        ? `${stillBad.length} 个模块不合格。**这些差异就是"拼不上"的具体位置**：按上面每一条去改契约（写域/出口/模块系统/依赖）或返工重派（cabinet_dispatch 带 only 参数只重跑这几个），不要重跑全部。`
-        : '全部通过机械检查。下一步：按 integration 把模块接到入口，跑一次构建/测试，然后 cabinet_integrate 交付。\n（需要语义复核就调 cabinet_audit，会用另一个席位的模型看接缝处）')
+        ? `${stillBad.length} 个模块不合格。**这些差异就是"拼不上"的具体位置**：按上面每一条去改契约（写域/出口/签名/模块系统/依赖）或返工重派（cabinet_dispatch 带 only 参数只重跑这几个），不要重跑全部。`
+        : verifyFailed
+          ? '各模块单独都合格，但**拼起来跑不过**（见上面的输出）—— 这就是 0.8.6 那种"全部报错"被提前抓到的样子。按这段报错去改对应模块或契约，然后重派那几块。'
+          : `全部通过，整体也${overall && overall.ok ? '真跑通了' : '按人工约定待你确认'}。下一步：cabinet_integrate 交付（它只认这次真跑的结果）。\n（需要语义复核就调 cabinet_audit，会用另一个席位的模型看接缝处）`)
       if (capped.length) {
         out.push('')
         out.push(`⛔ ${capped.map((m) => m.id).join('、')} 已经返工 ${MAX_REWORK} 轮还不过，这次没有再派 —— 停下来问用户：契约改不改、换人写、还是砍掉。`)
@@ -1674,10 +1607,10 @@ export function apply(ctx) {
 
   tool({
     name: 'cabinet_integrate',
-    description: '交付：确认各模块已接到入口、整体能跑，落 delivered 并出一份交付说明。',
+    description: '交付：只认**真跑过**的拼装验收。dispatch 阶段的 verify.all 没过、或根本没跑，都会被挡回去；过了才落 delivered 并出交付说明。',
     properties: {
       summary: { type: 'string', description: '交付说明：改了什么、怎么验、哪些是妥协' },
-      verified: { type: 'string', description: '你实际跑过的验证命令与结果（原样贴）' },
+      verified: { type: 'string', description: '你实际跑过的验证命令与结果（原样贴）；人工验收时这里必须写看到了什么' },
       files: { type: 'array', items: { type: 'string' }, description: '最终交付的文件清单' },
     },
     async run(args, exec) {
@@ -1685,12 +1618,38 @@ export function apply(ctx) {
       if (!d) return '当前没有议政。'
       if (!d.dispatch) return '还没有派过活，没什么可整合的。'
       const bad = Object.values(d.dispatch.modules).filter((r) => r.status !== 'done')
+      // 只派了一部分（cabinet_dispatch 带 only）就交付，等于把其余模块留成 stub —— 也算"拼不上"
+      const never = (d.contract?.modules || []).map((m) => String(m.id)).filter((id) => !d.dispatch.modules[id])
+      if (never.length) return `还有模块压根没派过：${never.join('、')} —— 先 cabinet_dispatch 跑全再交付（骨架里的 stub 一调就 throw，不能当交付物）。`
       if (bad.length) return `还有 ${bad.length} 个模块没交付成功（${bad.map((b) => b.id).join('、')}），先修完再整合。`
+
+      // 0.9 的闸门：没有一次真跑过的结果，就不许说"交付"。
+      // 0.8.6 只看 status==='done'，于是"全部报错"照样能一路交付给用户。
+      const v = d.dispatch.verify
+      if (!v) {
+        return [
+          '还没跑过拼装验收，不能交付 —— 我不能只凭"模块都 done"就说它能跑。',
+          '先回 cabinet_dispatch 跑一轮（它会按契约的 verify.all 真跑一次），跑通了再回来。',
+        ].join('\n')
+      }
+      if (v.ok === false) {
+        return [
+          `拼装验收没过（退出码 ${v.code}，命令：${v.cmd}），不能交付：`,
+          String(v.out || ''),
+          '',
+          '按这段报错改模块或契约，再 cabinet_dispatch（带 only）重派受影响的那几块。',
+        ].join('\n')
+      }
+      if (v.ok === null && !T(args.verified)) {
+        return `这个项目约定的是人工验收（${v.manual}）—— 交付前必须在 verified 里写你实际看到的结果，不能空着。`
+      }
+      const auto = v.ok === true ? `[插件真跑] ${v.cmd} → 退出码 0\n${String(v.out || '').slice(-1200)}` : ''
       d.status = 'delivered'
       d.delivered = {
         at: Date.now(),
         summary: T(args.summary),
-        verified: T(args.verified),
+        verified: [T(args.verified), auto].filter(Boolean).join('\n\n'),
+        autoVerify: v,
         files: Array.isArray(args.files) ? args.files.map(String) : Object.values(d.dispatch.modules).flatMap((r) => r.files || []),
       }
       d.speaker = 'chair'
@@ -1712,6 +1671,17 @@ export function apply(ctx) {
   function modulePrompt(d, m, cwd) {
     const contract = d.contract
     const peers = (contract.modules || []).filter((x) => String(x.id) !== String(m.id))
+    const sysLabel = String(contract.moduleSystem || 'esm').toLowerCase() === 'cjs'
+      ? 'CommonJS（require / module.exports）'
+      : 'ESM（import / export）'
+    const ownFile = (m.exports || []).map((e) => normPath(e.from || e.path || '')).find((f) => /\.(m?js|cjs)$/i.test(f)) || ''
+    const exText = (m.exports || []).map((e) => (e.kind === 'file' ? `文件 ${e.path}` : `${e.signature || e.name}　（在 ${e.from || '?'}）`)).join('；')
+    const impText = (m.imports || []).map((i) => {
+      const pm = peers.find((p) => String(p.id) === String(i.from))
+      const exp = findExport(pm, i.symbol)
+      return `${i.signature || i.symbol}　← 用 import '${i.specifier || '(没写)'}'（来自 ${i.from}${exp?.signature ? `，它承诺的签名：${exp.signature}` : ''}）`
+    }).join('；')
+    const vmod = contract?.verify?.module
     return [
       `你在一个多人并行项目里负责一个模块。项目根目录：${cwd}`,
       '',
@@ -1725,27 +1695,33 @@ export function apply(ctx) {
         return `· 派给你的人：${me.label}（${me.model}）${me.skill ? `　首辅按你的擅长指派：${me.skill}` : ''}`
       })(),
       `· 只能写这些路径（写域，越界就是事故）：${(m.writes || []).join('、') || '（未指定）'}`,
-      `· 要交出来的东西（别人按这个来拼）：${(m.exports || []).map((e) => e.kind === 'file' ? e.path : `symbol ${e.name} from ${e.from}`).join('；') || '（无）'}`,
-      `· 你依赖别人提供的：${(m.imports || []).map((i) => `${i.from}.${i.symbol}`).join('；') || '（不依赖别人）'}`,
+      ownFile
+        ? `· 骨架已经落好：${ownFile} 里就是你的出口 stub（现在是 throw），**直接在它上面改**，别另建同名文件、别改签名`
+        : '',
+      `· 要交出来的东西（别人已经按这一行接上了）：${exText || '（无）'}`,
+      `· 你依赖别人提供的（照抄这个签名和路径，不许自己凑）：${impText || '（不依赖别人）'}`,
       `· 验收标准：${(m.acceptance || []).join('；') || '（未写）'}`,
       m.brief ? `\n【背景材料 · 首辅递给你的原始事实】\n${m.brief}` : '',
       '',
-      `【别人的地盘 · 一个字都别动】`,
+      '【别人的地盘 · 一个字都别动】',
       ...peers.map((p) => `· ${p.id} ${p.title || ''}：${(p.writes || []).join('、')}`),
       '',
       '【别人承诺给你什么形状】—— 你按这个调用，不要自己猜，也不要替他们改：',
       ...(m.imports || []).map((i) => {
         const pm = peers.find((p) => String(p.id) === String(i.from))
-        const ex = (pm?.exports || []).map((e) => e.kind === 'file' ? `文件 ${e.path}` : `${e.name}（from ${e.from}）`).join('、')
-        return `· ${i.from}.${i.symbol}${ex ? `　它承诺的出口：${ex}` : ''}`
+        const exp = findExport(pm, i.symbol)
+        return `· ${i.from}.${i.symbol}　签名 ${exp?.signature || '（对方没写）'}　文件 ${exp ? normPath(exp.from || exp.path || '') : '（未知）'}　import '${i.specifier || '(没写)'}'`
       }),
-      (m.imports || []).length ? '' : '',
+      '',
       '【硬性约束】',
-      '0. **模块系统必须统一**：项目其它模块用的是 ' + (String(contract.moduleSystem || 'esm').toLowerCase() === 'cjs' ? 'CommonJS（require / module.exports）' : 'ESM（import / export）') + '。别混用 —— 混用的人单独看代码没问题，拼起来运行时一定失败。',
-      '1. 只在你的写域里创建/修改文件。需要别人地盘里的东西，就按 imports 里承诺的接口去调用，**不要替他们写**。',
-      '2. 进出口形状必须和 exports/imports 写的完全一致（名字、路径、参数顺序、返回形状）。你觉得契约有问题，就在 notes 里写清楚，不要自己改接口——改了别人就接不上。',
-      '3. 能跑就跑一下（语法检查 / 单测），别交没验证过的东西。',
-      '4. 结束时调用结构化输出工具（或直接按 schema 输出）回报：moduleId、done、files（你实际写/改的文件相对路径）、notes（做了什么、哪里有妥协、契约哪里可能有问题）。',
+      `0. **模块系统必须统一**：${sysLabel}。别混用 —— 单独看没问题，拼起来运行时一定失败。`,
+      '1. 只在你的写域里创建/修改文件。需要别人地盘里的东西，就按 imports 里承诺的接口调用，**不要替他们写一份**（复制别人的实现 = 两处以后会改歪）。',
+      `2. 出口的名字、参数个数与顺序、返回形状必须和契约那一行签名**逐字一致**；import 别人必须用上面给的 specifier（那个路径已经指到它交的文件），**不要自己猜 ./a.js 还是 ../lib/a.js**。契约有问题就在 notes 里说，不许自己改接口。`,
+      '3. stub 里的 throw 全部换成真实现，一个都别留 —— 留着就是把错误留给拼装的时候。',
+      vmod
+        ? `4. 写完自检：跑 \`${fill(vmod, { file: ownFile, files: ownFile, cwd })}\`，跑通了才报 done，把命令和退出码写进回执的 checks。`
+        : '4. 能跑就跑一下（语法检查 / 单测），跑不通别报 done；把命令和退出码写进回执的 checks。',
+      '5. 结束时按 schema 回报：moduleId、done、files（你实际写/改的文件相对路径）、checks（[{cmd, ok, out}]）、notes（做了什么、哪里有妥协、契约哪里可能有问题）。',
     ].filter(Boolean).join('\n')
   }
 
@@ -1758,13 +1734,14 @@ export function apply(ctx) {
       `【交付目标】${d.contract?.goal || ''}`,
       `【被审模块】${m.id} ${m.title || ''}（由 ${m.seat} 完成）`,
       `· 写域：${(m.writes || []).join('、')}`,
-      `· 承诺出口：${(m.exports || []).map((e) => e.kind === 'file' ? e.path : `${e.name} from ${e.from}`).join('；')}`,
-      `· 依赖：${(m.imports || []).map((i) => `${i.from}.${i.symbol}`).join('；') || '无'}`,
+      `· 承诺出口：${(m.exports || []).map((e) => (e.kind === 'file' ? e.path : `${e.signature || e.name}（在 ${e.from}）`)).join('；')}`,
+      `· 依赖：${(m.imports || []).map((i) => `${i.signature || i.symbol}　import '${i.specifier || '?'}'（来自 ${i.from}）`).join('；') || '无'}`,
       `· 验收标准：${(m.acceptance || []).join('；')}`,
       `· 它交付的文件：${(rec.files || []).join('、')}`,
       '',
       '去读这些文件，只回答一个问题：**它交出来的东西，别人按契约接上去会不会断？**',
-      '重点看接缝：函数签名与返回值形状、命名约定、单位（px/em/ms）、错误处理方式（抛异常还是返回 null）、数据结构字段名。',
+      '重点看接缝：函数签名与返回值形状（参数个数/顺序/类型对不对得上契约那一行）、命名约定、单位（px/em/ms）、错误处理方式（抛异常还是返回 null）、数据结构字段名。',
+      d.dispatch?.verify?.ok === true ? `\n【整体验收已经真跑通】${d.dispatch.verify.cmd}\n它只能证明"跑得起来"，证明不了"接得对" —— 你还是要看形状。` : '',
       '不要评论代码风格、不要建议重构、不要看没在契约里的东西。',
       'verdict=ok 只在"接得上"时给；有一处接不上就 suspect，并把具体差异写进 seamIssues（引文件名与行号）。',
       '最后**必须**调用 structured_output 提交 {verdict, seamIssues, evidence}；verdict 只能是 "ok" 或 "suspect"，**不许留空、不许写"无法判断"**——读完了就得下结论；seamIssues 在 ok 时可以给空数组。',

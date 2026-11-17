@@ -1,6 +1,6 @@
 {
   "name": "dsh-cabinet",
-  "version": "0.8.6",
+  "version": "0.9.2",
   "description": "DSH 插件：内阁 —— 一条对话里多个模型当面争论、出方案，你挑一个，首辅按各人擅长分工、并行开工、首辅亲自验拼接、整合交付",
   "keywords": [
     "dsh",
@@ -31,6 +31,7 @@
   "files": [
     "index.js",
     "client.js",
+    "lib",
     "cordis.patch.yml",
     "README.md",
     "DESIGN.md",
@@ -38,7 +39,8 @@
   ],
   "scripts": {
     "smoke": "node smoke.cjs",
-    "check": "node --check index.js && node --check client.js && node smoke.cjs"
+    "test": "node --test test/contract.test.mjs",
+    "check": "node --check index.js && node --check client.js && node --test test/contract.test.mjs && node smoke.cjs"
   },
   "engines": {
     "dsh": ">=0.1.7-rc.1",
