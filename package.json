@@ -32,6 +32,8 @@
     "index.js",
     "client.js",
     "lib",
+    "test",
+    "smoke.cjs",
     "cordis.patch.yml",
     "README.md",
     "DESIGN.md",
